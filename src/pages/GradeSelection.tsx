@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { GraduationCap, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import { grades } from "@/lib/mockData";
 import { updateProgress } from "@/lib/progressStore";
@@ -19,7 +19,11 @@ export default function GradeSelection() {
         <ScrollReveal>
           <div className="text-center mb-12">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-              <GraduationCap className="w-8 h-8 text-primary" />
+              <img
+                src="/csjs-logo.png"
+                alt="Colegio de San Juan Samar logo"
+                className="h-12 w-12 rounded-xl object-cover"
+              />
             </div>
             <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">Select Your Grade Level</h1>
             <p className="text-muted-foreground text-lg">Choose your grade to access curriculum-aligned lessons and activities.</p>

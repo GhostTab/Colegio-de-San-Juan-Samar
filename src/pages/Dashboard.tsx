@@ -242,7 +242,6 @@ export default function Dashboard() {
                         </div>
                         <div className="hidden sm:flex items-center gap-3 text-sm text-muted-foreground">
                           <span className="px-3 py-1 rounded-full bg-secondary capitalize">{lesson.type}</span>
-                          <span>{lesson.duration}</span>
                         </div>
                       </motion.div>
                     </Link>

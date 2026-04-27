@@ -26,9 +26,8 @@ export default function SubjectSelection() {
 
   const getSubjectMeta = (subjectId: string) => {
     const subjectLessons = lessons.filter(l => l.grade === grade && l.subject === subjectId);
-    const totalMinutes = subjectLessons.reduce((sum, item) => sum + parseInt(item.duration, 10), 0);
     const interactiveCount = subjectLessons.filter(item => item.type !== "video").length;
-    return { totalMinutes, interactiveCount, preview: subjectLessons.slice(0, 2) };
+    return { interactiveCount, preview: subjectLessons.slice(0, 2) };
   };
 
   return (
@@ -81,7 +80,7 @@ export default function SubjectSelection() {
                     </div>
                     <div>
                       <h3 className="font-bold text-foreground">{sub.name}</h3>
-                      <p className="text-sm text-muted-foreground">{status.label} · {meta.totalMinutes} min</p>
+                      <p className="text-sm text-muted-foreground">{status.label}</p>
                     </div>
                   </div>
 

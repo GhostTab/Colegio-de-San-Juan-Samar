@@ -172,9 +172,7 @@ export default function LessonViewer() {
                     {completed.has(l.id) && selectedLesson !== i && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
                     <div>
                       <div className="font-medium">{l.title}</div>
-                      <div className={`text-xs mt-0.5 ${selectedLesson === i ? "text-primary-foreground/70" : ""}`}>
-                        {l.duration} · {l.type}
-                      </div>
+                      <div className={`text-xs mt-0.5 ${selectedLesson === i ? "text-primary-foreground/70" : ""}`}>{l.type}</div>
                     </div>
                   </button>
                 ))}

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 type DiagramPoint = {
   id: string;
@@ -13,9 +14,11 @@ type InteractiveDiagramProps = {
   title: string;
   subtitle: string;
   points: DiagramPoint[];
+  background?: ReactNode;
+  helperText?: string;
 };
 
-export default function InteractiveDiagram({ title, subtitle, points }: InteractiveDiagramProps) {
+export default function InteractiveDiagram({ title, subtitle, points, background, helperText }: InteractiveDiagramProps) {
   const [active, setActive] = useState(points[0]?.id ?? "");
   const current = points.find((point) => point.id === active) ?? points[0];
 
@@ -24,7 +27,8 @@ export default function InteractiveDiagram({ title, subtitle, points }: Interact
       <h4 className="font-semibold text-foreground">{title}</h4>
       <p className="text-sm text-muted-foreground mb-3">{subtitle}</p>
 
-      <div className="relative h-48 rounded-xl border border-border bg-card/60">
+      <div className="relative h-48 overflow-hidden rounded-xl border border-border bg-card/60">
+        {background ? <div className="pointer-events-none absolute inset-0">{background}</div> : null}
         {points.map((point) => (
           <button
             key={point.id}
@@ -38,6 +42,7 @@ export default function InteractiveDiagram({ title, subtitle, points }: Interact
           </button>
         ))}
       </div>
+      {helperText ? <p className="mt-2 text-xs text-muted-foreground">{helperText}</p> : null}
 
       {current ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3 rounded-xl bg-secondary/70 px-3 py-2 text-sm text-foreground">

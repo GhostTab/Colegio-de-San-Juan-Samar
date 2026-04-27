@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, GraduationCap, Volume2, VolumeX, Compass } from "lucide-react";
+import { Menu, X, Volume2, VolumeX, Compass } from "lucide-react";
 import { getProgress, updateProgress } from "@/lib/progressStore";
 
 export default function Navbar() {
@@ -38,9 +38,11 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img
+              src="/csjs-logo.png"
+              alt="Colegio de San Juan Samar logo"
+              className="h-9 w-9 rounded-xl object-cover"
+            />
             <span className="font-bold text-lg text-foreground hidden sm:block">
               CSJS <span className="text-primary">Learn</span>
             </span>

@@ -197,7 +197,7 @@ export default function TeacherPanel() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>Use lesson replay and captions for classes below 70% challenge accuracy.</li>
               <li>Assign drag-and-drop sequencing activities after concept-heavy lessons.</li>
-              <li>Review lessons with more dislikes and collect student comments in survey.</li>
+              <li>Review lessons with more dislikes and collect student comments from class check-ins.</li>
             </ul>
           </div>
         </ScrollReveal>

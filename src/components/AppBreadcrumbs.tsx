@@ -18,7 +18,6 @@ const routeName: Record<string, string> = {
   lessons: "Lessons",
   quiz: "Activities",
   teacher: "Teacher Panel",
-  survey: "Feedback Survey",
 };
 
 export default function AppBreadcrumbs() {

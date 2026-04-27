@@ -8,7 +8,6 @@ import {
   ArrowRight,
   Inbox,
   Trophy,
-  BarChart3,
   Compass,
   Sparkles,
 } from "lucide-react";
@@ -99,10 +98,6 @@ export default function Dashboard() {
               <Link to="/quiz" className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 hover:bg-secondary">
                 <Trophy className="h-3.5 w-3.5" />
                 Practice Activities
-              </Link>
-              <Link to="/survey" className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 hover:bg-secondary">
-                <BarChart3 className="h-3.5 w-3.5" />
-                Share Feedback
               </Link>
             </div>
           </div>

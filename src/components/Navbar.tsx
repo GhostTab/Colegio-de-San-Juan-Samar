@@ -24,7 +24,6 @@ export default function Navbar() {
       active: location.pathname === "/grades" || location.pathname === "/subjects" || location.pathname === "/lessons",
     },
     { to: "/quiz", label: "Activities", active: location.pathname === "/quiz" },
-    { to: "/survey", label: "Feedback", active: location.pathname === "/survey" },
   ];
 
   const toggleSound = () => {

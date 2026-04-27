@@ -13,7 +13,6 @@ import Dashboard from "@/pages/Dashboard";
 import LessonViewer from "@/pages/LessonViewer";
 import Quiz from "@/pages/Quiz";
 import TeacherPanel from "@/pages/TeacherPanel";
-import Survey from "@/pages/Survey";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,7 +33,6 @@ const App = () => (
           <Route path="/lessons" element={<LessonViewer />} />
           <Route path="/quiz" element={<Quiz />} />
           <Route path="/teacher" element={<TeacherPanel />} />
-          <Route path="/survey" element={<Survey />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <AIAssistant />

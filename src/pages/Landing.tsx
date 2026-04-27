@@ -9,9 +9,7 @@ import {
   Target,
   BarChart3,
   Layers3,
-  Orbit,
   BookOpen,
-  Users,
   CheckCircle2,
 } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -24,28 +22,23 @@ export default function Landing() {
   const backgroundY = useTransform(scrollYProgress, [0, 1], [0, 110]);
 
   const features = [
-    { icon: Play, title: "Animated Lessons", desc: "Concept-first visual explainers for hard topics." },
-    { icon: Zap, title: "Interactive Practice", desc: "Students learn through active, clickable tasks." },
-    { icon: Target, title: "Adaptive Feedback", desc: "Hints and corrections update in real-time." },
-    { icon: BarChart3, title: "Live Analytics", desc: "Teachers track mastery and pacing by class." },
+    { icon: Play, title: "Lesson Player", desc: "Students move through guided lesson steps with controls and captions." },
+    { icon: Zap, title: "Challenge Arena", desc: "Each lesson includes checkpoint questions linked to the current step." },
+    { icon: Target, title: "Quiz Practice", desc: "Students can open subject quizzes to review and test understanding." },
+    { icon: BarChart3, title: "Progress Tracking", desc: "Dashboard and teacher view show completion and challenge performance." },
   ];
 
   const pillars = useMemo(
     () => [
       {
         icon: Layers3,
-        title: "Narrative Modules",
-        detail: "Lessons flow as stories with scene transitions and checkpoints.",
-      },
-      {
-        icon: Orbit,
-        title: "Immersive Motion",
-        detail: "Subtle depth, speed ramps, and timeline controls sustain attention.",
+        title: "Grade-to-Subject Flow",
+        detail: "Students select grade, choose subject, then follow lessons in sequence.",
       },
       {
         icon: Sparkles,
-        title: "Cinematic UI",
-        detail: "Modern glass surfaces and magnetic highlights guide focus.",
+        title: "Built-in Classroom Tools",
+        detail: "Includes lesson controls, challenge checkpoints, and teacher-facing progress views.",
       },
     ],
     [],
@@ -147,10 +140,10 @@ export default function Landing() {
         <div className="relative mx-auto max-w-7xl">
           <ScrollReveal>
             <div className="mb-14 max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Framer-style components</p>
-              <h2 className="mt-3 text-4xl font-black leading-tight md:text-5xl">Every interaction earns attention.</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Core learning features</p>
+              <h2 className="mt-3 text-4xl font-black leading-tight md:text-5xl">What students and teachers can do.</h2>
               <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-                Designed like a modern product homepage with immersive transitions, clean typography, and focused micro-interactions.
+                The platform supports lessons, checkpoints, quizzes, and progress monitoring for Grades 7-10.
               </p>
             </div>
           </ScrollReveal>
@@ -179,19 +172,19 @@ export default function Landing() {
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <ScrollReveal>
             <div className="rounded-[2rem] border border-border/60 bg-card/75 p-8 backdrop-blur-2xl md:p-10">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Outcome</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">In this system</p>
               <h2 className="mt-3 text-4xl font-black leading-tight md:text-5xl">
-                Interactive learning experiences.
+                Lesson progression,
                 <br />
-                Classroom-ready results.
+                guided by completion.
               </h2>
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
-                The visual language feels premium, but every element still serves learning clarity and pedagogy goals.
+                Students complete a lesson before opening the next one, keeping the flow structured and consistent.
               </p>
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 {[
-                  { icon: BookOpen, value: "85%", label: "engagement increase" },
-                  { icon: Users, value: "3x", label: "retention gain" },
+                  { icon: BookOpen, value: "4", label: "grade levels (7-10)" },
+                  { icon: Target, value: "1", label: "challenge arena per lesson view" },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-border/70 bg-background/75 p-4">
                     <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
@@ -210,10 +203,10 @@ export default function Landing() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">What students get</p>
               <ul className="mt-6 space-y-4">
                 {[
-                  "Scene-based lessons with cinematic transitions",
-                  "Interactive checkpoints after each concept",
-                  "Instant guidance when answers are incorrect",
-                  "Progress visibility for students and teachers",
+                  "Step-by-step lessons with play, replay, captions, and speed controls",
+                  "Challenge Arena checkpoints tied to the current lesson step",
+                  "Quiz Practice by grade and subject",
+                  "Progress tracking through student dashboard and teacher panel",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3 text-sm leading-relaxed text-foreground/90">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -229,9 +222,9 @@ export default function Landing() {
       <section className="px-4 pb-24">
         <ScrollReveal>
           <div className="mx-auto max-w-5xl rounded-[2rem] border border-border/60 bg-card/70 px-8 py-14 text-center backdrop-blur-2xl md:px-14 md:py-16">
-            <h2 className="text-3xl font-black md:text-5xl">Ready to launch a modern learning experience?</h2>
+            <h2 className="text-3xl font-black md:text-5xl">Ready to start the lesson flow?</h2>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
-              Built to look world-class while staying practical for teachers and students.
+              Choose a grade, open a subject, and begin structured lesson and challenge activities.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link

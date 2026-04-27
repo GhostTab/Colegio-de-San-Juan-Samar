@@ -6,16 +6,32 @@ import ScrollReveal from "@/components/ScrollReveal";
 import { quizQuestions as allQuizQuestions, filterQuizQuestions, subjects } from "@/lib/contentData";
 import QuizOptionCard from "@/components/quiz/QuizOptionCard";
 
+const QUIZ_ITEMS_PER_RUN = 3;
+
 export default function Quiz() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const gradeParam = params.get("grade");
   const subjectParam = params.get("subject");
+  const isCombinedMode = subjectParam === "all";
   const gradeFilter = gradeParam != null && gradeParam !== "" ? Number(gradeParam) : null;
-  const subjectFilter = subjectParam != null && subjectParam !== "" ? subjectParam : null;
+  const subjectFilter =
+    subjectParam != null && subjectParam !== "" && subjectParam !== "all"
+      ? subjectParam
+      : null;
+  const availableSubjects = useMemo(
+    () =>
+      subjects.filter((subject) => filterQuizQuestions(allQuizQuestions, gradeFilter, subject.id).length > 0),
+    [gradeFilter],
+  );
+  const [attempt, setAttempt] = useState(0);
 
-  const quizQuestions = useMemo(
+  const filteredQuestions = useMemo(
     () => filterQuizQuestions(allQuizQuestions, gradeFilter, subjectFilter),
     [gradeFilter, subjectFilter],
+  );
+  const quizQuestions = useMemo(
+    () => buildUniqueQuizRun(filteredQuestions, attempt),
+    [filteredQuestions, attempt],
   );
 
   const [current, setCurrent] = useState(0);
@@ -109,6 +125,8 @@ export default function Quiz() {
   );
 
   const restart = () => {
+    const nextAttempt = attempt + 1;
+    setAttempt(nextAttempt);
     setCurrent(0);
     setSelected(null);
     setAnswers(Array(quizQuestions.length).fill(null));
@@ -120,16 +138,74 @@ export default function Quiz() {
   };
 
   const filterDescription =
-    gradeFilter != null && !Number.isNaN(gradeFilter) && subjectFilter
+    gradeFilter != null && !Number.isNaN(gradeFilter) && isCombinedMode
+      ? `Grade ${gradeFilter} · Combined Subjects`
+      : gradeFilter != null && !Number.isNaN(gradeFilter) && subjectFilter
       ? `Grade ${gradeFilter} · ${subjects.find((s) => s.id === subjectFilter)?.name ?? subjectFilter}`
       : gradeFilter != null && !Number.isNaN(gradeFilter)
         ? `Grade ${gradeFilter}`
+        : isCombinedMode
+          ? "Combined Subjects"
         : subjectFilter
           ? subjects.find((s) => s.id === subjectFilter)?.name ?? subjectFilter
           : null;
 
   const excellentThreshold = Math.max(2, Math.ceil(quizQuestions.length * 0.75));
   const goodThreshold = Math.max(1, Math.ceil(quizQuestions.length * 0.5));
+
+  if (!subjectParam) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 px-4">
+        <div className="max-w-3xl mx-auto">
+          <ScrollReveal>
+            <div className="glass-card p-8 md:p-10">
+              <h1 className="text-3xl font-bold text-foreground mb-2">Quiz Time! 🧠</h1>
+              <p className="text-muted-foreground mb-6">
+                Choose a subject or take a combined quiz{gradeFilter != null && !Number.isNaN(gradeFilter) ? ` for Grade ${gradeFilter}` : ""}.
+              </p>
+              {availableSubjects.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      const next = new URLSearchParams(params);
+                      next.set("subject", "all");
+                      if (gradeFilter == null || Number.isNaN(gradeFilter)) {
+                        next.delete("grade");
+                      }
+                      setParams(next);
+                    }}
+                    className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-left transition-colors hover:bg-primary/10"
+                  >
+                    <p className="font-semibold text-foreground">Combined Subjects</p>
+                    <p className="text-xs text-muted-foreground mt-1">Mix questions from all available subjects</p>
+                  </button>
+                  {availableSubjects.map((subject) => (
+                    <button
+                      key={subject.id}
+                      onClick={() => {
+                        const next = new URLSearchParams(params);
+                        next.set("subject", subject.id);
+                        if (gradeFilter == null || Number.isNaN(gradeFilter)) {
+                          next.delete("grade");
+                        }
+                        setParams(next);
+                      }}
+                      className="rounded-2xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-secondary/80"
+                    >
+                      <p className="font-semibold text-foreground">{subject.name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Start {subject.name} quiz</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No quiz items available for the current filter.</p>
+              )}
+            </div>
+          </ScrollReveal>
+        </div>
+      </div>
+    );
+  }
 
   if (quizQuestions.length === 0) {
     return (
@@ -277,4 +353,43 @@ export default function Quiz() {
       </div>
     </div>
   );
+}
+
+function shuffleQuestionsForAttempt<T extends { id: number }>(questions: T[], attempt: number) {
+  if (questions.length <= 1) return questions;
+  const seeded = questions.map((question) => {
+    // Deterministic shuffle key to avoid same order every retry.
+    const raw = Math.sin((question.id + 1) * 97 + (attempt + 1) * 131) * 10000;
+    return { question, key: raw - Math.floor(raw) };
+  });
+  seeded.sort((a, b) => a.key - b.key);
+  return seeded.map((item) => item.question);
+}
+
+function buildUniqueQuizRun<
+  T extends { id: number; question: string; options: string[]; correct: number }
+>(questions: T[], attempt: number) {
+  const shuffled = shuffleQuestionsForAttempt(questions, attempt);
+  const seenStem = new Set<string>();
+  const unique: T[] = [];
+
+  for (const question of shuffled) {
+    const stem = normalizeQuestionStem(question.question);
+    if (seenStem.has(stem)) continue;
+    seenStem.add(stem);
+    unique.push(question);
+  }
+
+  return unique.slice(0, QUIZ_ITEMS_PER_RUN);
+}
+
+function normalizeQuestionStem(question: string) {
+  return question
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^grade\s+\d+\s+[a-z]+\s*-\s*[^:]+:\s*/i, "")
+    .replace(/^[^:]{3,80}:\s*/i, "")
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s*\(grade\s+\d+.+item\s+\d+\)\s*$/i, "")
+    .trim();
 }

@@ -23,6 +23,7 @@ import {
   CaptionsOff,
   ListChecks,
   ExternalLink,
+  Lock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -128,6 +129,11 @@ export default function LessonViewer() {
     const picked = challengeSelections[index];
     return total + (typeof picked === "number" && picked === item.correct ? 1 : 0);
   }, 0);
+  const isLessonUnlocked = (lessonIndex: number) => {
+    if (lessonIndex === 0) return true;
+    const previousLesson = subjectLessons[lessonIndex - 1];
+    return previousLesson ? completed.has(previousLesson.id) : false;
+  };
 
   const selectChallenge = (optionIndex: number) => {
     if (challengeRevealed || !challenge) return;
@@ -162,14 +168,23 @@ export default function LessonViewer() {
                 {subjectLessons.map((l, i) => (
                   <button
                     key={l.id}
-                    onClick={() => setSelectedLesson(i)}
+                    onClick={() => {
+                      if (!isLessonUnlocked(i)) return;
+                      setSelectedLesson(i);
+                    }}
+                    disabled={!isLessonUnlocked(i)}
                     className={`w-full text-left p-3 rounded-xl text-sm transition-all flex items-center gap-2 ${
+                      !isLessonUnlocked(i)
+                        ? "cursor-not-allowed opacity-55"
+                        : ""
+                    } ${
                       selectedLesson === i
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-secondary text-muted-foreground"
                     }`}
                   >
-                    {completed.has(l.id) && selectedLesson !== i && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                    {!isLessonUnlocked(i) && <Lock className="w-4 h-4 text-muted-foreground shrink-0" />}
+                    {isLessonUnlocked(i) && completed.has(l.id) && selectedLesson !== i && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
                     <div>
                       <div className="font-medium">{l.title}</div>
                       <div className={`text-xs mt-0.5 ${selectedLesson === i ? "text-primary-foreground/70" : ""}`}>{l.type}</div>

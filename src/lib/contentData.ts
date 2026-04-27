@@ -88,7 +88,7 @@ export const quizQuestions: ContentQuizQuestion[] = lessons.map((lesson, index) 
       grade: lesson.grade,
       subject: lesson.subject,
       sourcePdf: lesson.sourcePdf,
-      question: `Grade ${lesson.grade} ${subjectLabel(lesson.subject)}: ${lesson.learningFocus ?? "Review the lesson steps."}`,
+      question: `Grade ${lesson.grade} ${subjectLabel(lesson.subject)} - ${lesson.title}: ${lesson.learningFocus ?? "Review the lesson steps."}`,
       options: fallback.options,
       correct: fallback.correct,
       explanation: lesson.learningFocus ?? "Use the lesson steps to review.",
@@ -100,7 +100,7 @@ export const quizQuestions: ContentQuizQuestion[] = lessons.map((lesson, index) 
     grade: lesson.grade,
     subject: lesson.subject,
     sourcePdf: lesson.sourcePdf,
-    question: q.question,
+    question: `${lesson.title}: ${q.question}`,
     options: shifted.options,
     correct: shifted.correct,
     explanation: q.explanation,
@@ -119,6 +119,29 @@ export function filterQuizQuestions(
   if (subjectId != null && subjectId !== "") {
     pool = pool.filter((q) => q.subject === subjectId);
   }
-  if (pool.length === 0) return all;
-  return pool;
+  return dedupeQuizPoolByStem(pool);
+}
+
+function dedupeQuizPoolByStem(pool: ContentQuizQuestion[]) {
+  const seen = new Set<string>();
+  const unique: ContentQuizQuestion[] = [];
+
+  for (const item of pool) {
+    const key = normalizeQuizStem(item.question);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+
+  return unique;
+}
+
+function normalizeQuizStem(question: string) {
+  return question
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^grade\s+\d+\s+[a-z]+\s*-\s*[^:]+:\s*/i, "")
+    .replace(/^[^:]{3,120}:\s*/i, "")
+    .replace(/[^\w\s]/g, "")
+    .trim();
 }

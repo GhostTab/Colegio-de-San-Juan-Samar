@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
@@ -8,7 +8,6 @@ import {
   Zap,
   Target,
   BarChart3,
-  Layers3,
   BookOpen,
   CheckCircle2,
 } from "lucide-react";
@@ -27,22 +26,6 @@ export default function Landing() {
     { icon: Target, title: "Quiz Practice", desc: "Students can open subject quizzes to review and test understanding." },
     { icon: BarChart3, title: "Progress Tracking", desc: "Dashboard and teacher view show completion and challenge performance." },
   ];
-
-  const pillars = useMemo(
-    () => [
-      {
-        icon: Layers3,
-        title: "Grade-to-Subject Flow",
-        detail: "Students select grade, choose subject, then follow lessons in sequence.",
-      },
-      {
-        icon: Sparkles,
-        title: "Built-in Classroom Tools",
-        detail: "Includes lesson controls, challenge checkpoints, and teacher-facing progress views.",
-      },
-    ],
-    [],
-  );
 
   return (
     <div className="min-h-screen overflow-hidden bg-background text-foreground">
@@ -117,22 +100,6 @@ export default function Landing() {
             </motion.div>
           </div>
         </motion.div>
-      </section>
-
-      <section className="px-4 pb-8 md:pb-14">
-        <div className="mx-auto grid max-w-7xl gap-5 rounded-[2rem] border border-border/60 bg-card/65 p-5 backdrop-blur-2xl md:grid-cols-3 md:p-7">
-          {pillars.map((pillar, index) => (
-            <ScrollReveal key={pillar.title} delay={index * 0.08}>
-              <div className="rounded-3xl border border-border/60 bg-background/75 p-5">
-                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                  <pillar.icon className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold">{pillar.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{pillar.detail}</p>
-              </div>
-            </ScrollReveal>
-          ))}
-        </div>
       </section>
 
       <section className="relative px-4 py-24">

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import { subjects, lessons, badges as allBadges } from "@/lib/contentData";
+import { calculateCompletionProgress } from "@/lib/dashboardProgress";
 import { getProgress } from "@/lib/progressStore";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useMemo, useState } from "react";
@@ -34,8 +35,7 @@ export default function Dashboard() {
     : 0;
   const likedLessons = Object.values(progress.lessonReactions).filter((reaction) => reaction === "like").length;
   const dislikedLessons = Object.values(progress.lessonReactions).filter((reaction) => reaction === "dislike").length;
-  const lessonsForGrade = lessons.filter((lesson) => (grade ? lesson.grade === grade : true)).length;
-  const completionPercent = lessonsForGrade ? Math.round((completedCount / lessonsForGrade) * 100) : 0;
+  const completionProgress = calculateCompletionProgress(progress.completedLessons, lessons, grade);
 
   // Recent lessons
   const recentLessons = progress.completedLessons
@@ -139,18 +139,18 @@ export default function Dashboard() {
                 <div className="glass-card p-5">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="font-semibold text-foreground">Completion Progress</h3>
-                    <span className="text-sm font-semibold text-primary">{completionPercent}%</span>
+                    <span className="text-sm font-semibold text-primary">{completionProgress.percent}%</span>
                   </div>
                   <div className="h-2.5 rounded-full bg-secondary">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${completionPercent}%` }}
+                      animate={{ width: `${completionProgress.percent}%` }}
                       transition={{ duration: 0.8 }}
                       className="h-2.5 rounded-full bg-gradient-to-r from-primary to-accent"
                     />
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {completedCount} of {lessonsForGrade || lessons.length} lessons completed
+                    {completionProgress.completed} of {completionProgress.total || lessons.length} lessons completed
                   </p>
                 </div>
                 <div className="glass-card p-5">

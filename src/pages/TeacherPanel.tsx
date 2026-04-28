@@ -167,7 +167,7 @@ export default function TeacherPanel() {
                       className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
                       <td className="py-3 px-4 font-medium text-foreground">{s.name}</td>
                       <td className="py-3 px-4 text-muted-foreground">Grade {s.grade}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4">            
                         <div className="flex items-center gap-2">
                           <div className="w-24 bg-secondary rounded-full h-2">
                             <div className="h-2 rounded-full gradient-primary" style={{ width: `${s.progress}%` }} />

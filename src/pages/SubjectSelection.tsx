@@ -133,7 +133,7 @@ export default function SubjectSelection() {
 
         {availableSubjects.length === 0 && (
           <div className="glass-card p-12 text-center">
-            <p className="text-muted-foreground">No lessons available for Grade {grade} yet. Check back soon!</p>
+            <p className="text-muted-foreground">Lesson content not available yet for Grade {grade}. DepEd-scraped lessons will appear once that grade and subject feed is available.</p>
           </div>
         )}
       </div>

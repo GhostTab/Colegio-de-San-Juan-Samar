@@ -33,7 +33,7 @@ function step(
   };
 }
 
-function mathBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function mathBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -188,7 +188,7 @@ function mathBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-function scienceBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function scienceBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -353,7 +353,7 @@ function scienceBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-function englishBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function englishBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -523,7 +523,7 @@ function englishBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-function filipinoBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function filipinoBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -688,7 +688,7 @@ function filipinoBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-function apBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function apBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -853,7 +853,7 @@ function apBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-function ictTleBundle(grade: number, slot: 0 | 1 | 2, subjectId: "ict" | "tle"): ModuleTeachingBundle {
+function ictTleBundle(grade: number, slot: 0 | 1 | 2 | 3, subjectId: "ict" | "tle"): ModuleTeachingBundle {
   const g = grade;
   const isTle = subjectId === "tle";
   const label = isTle ? "TLE" : "ICT";
@@ -1059,7 +1059,7 @@ function ictTleBundle(grade: number, slot: 0 | 1 | 2, subjectId: "ict" | "tle"):
     };
 }
 
-function mapehBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+function mapehBundle(grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   const g = grade;
   if (slot === 0) {
     return {
@@ -1237,7 +1237,7 @@ function mapehBundle(grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
   };
 }
 
-export function getModuleTeachingContent(subjectId: string, grade: number, slot: 0 | 1 | 2): ModuleTeachingBundle {
+export function getModuleTeachingContent(subjectId: string, grade: number, slot: 0 | 1 | 2 | 3): ModuleTeachingBundle {
   switch (subjectId) {
     case "math":
       return mathBundle(grade, slot);

@@ -41,6 +41,26 @@ export interface Lesson {
     correct: number;
     explanation: string;
   };
+  processedContent?: {
+    mainTopic: string;
+    keyConcepts: string[];
+    learningObjectives: string[];
+    visualModel?: {
+      title: string;
+      nodes: string[];
+      caption: string;
+    };
+    activity?: {
+      prompt: string;
+      expectedKeywords: string[];
+    };
+    assignment?: {
+      prompt: string;
+      checklist: string[];
+      expectedKeywords?: string[];
+    };
+    fallbackReason?: string;
+  };
   steps: LessonStep[];
 }
 

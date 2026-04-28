@@ -12,12 +12,9 @@ import {
   Gauge,
   BookOpen,
   Lightbulb,
-  MousePointerClick,
   CheckCircle2,
   ArrowLeft,
-  Trophy,
   Sparkles,
-  Flame,
   Loader2,
   Captions,
   CaptionsOff,
@@ -54,25 +51,22 @@ export default function LessonViewer() {
   const [completed, setCompleted] = useState<Set<number>>(new Set());
   const [showCaptions, setShowCaptions] = useState(true);
   const [mediaReady, setMediaReady] = useState(false);
-  const [challengeSelections, setChallengeSelections] = useState<Record<number, number>>({});
-  const [challengeRevealedMap, setChallengeRevealedMap] = useState<Record<number, boolean>>({});
   const [activityResponse, setActivityResponse] = useState("");
-  const [assignmentResponse, setAssignmentResponse] = useState("");
-  const [submittedResponses, setSubmittedResponses] = useState<Record<"activity" | "assignment", boolean>>({
-    activity: false,
-    assignment: false,
-  });
+  const [activitySubmitted, setActivitySubmitted] = useState(false);
+  const [quizChoice, setQuizChoice] = useState<number | null>(null);
+  const [quizRevealed, setQuizRevealed] = useState(false);
 
   const lesson = subjectLessons[selectedLesson];
   const steps = useMemo(() => (lesson ? buildTeachingSlides(lesson) : []), [lesson]);
   const step = steps[currentStep];
   const lessonProgress = steps.length ? Math.round(((currentStep + 1) / steps.length) * 100) : 0;
   const isSourceScrapedLesson = isScrapedSourceLesson(lesson);
-  const challengePool = useMemo(
-    () => (lesson ? buildLessonChallenges(lesson, steps, subjectLessons) : []),
-    [lesson, steps, subjectLessons],
-  );
   const shouldScrollLessonList = subjectLessons.length > 7;
+  const activeActivity = lesson?.processedContent?.activity ?? lesson?.processedContent?.assignment;
+  const activeQuiz = lesson?.contentQuiz;
+  const activityKeywords = (activeActivity?.expectedKeywords ?? []).filter(Boolean);
+  const activityKeywordHits = activityKeywords.filter((keyword) => activityResponse.toLowerCase().includes(keyword.toLowerCase())).length;
+  const challengeScore = quizRevealed && typeof quizChoice === "number" && quizChoice === activeQuiz?.correct ? 1 : 0;
 
   useEffect(() => {
     const progress = getProgress();
@@ -90,11 +84,10 @@ export default function LessonViewer() {
   }, [lesson, subjectId]);
 
   useEffect(() => {
-    setChallengeSelections({});
-    setChallengeRevealedMap({});
     setActivityResponse("");
-    setAssignmentResponse("");
-    setSubmittedResponses({ activity: false, assignment: false });
+    setActivitySubmitted(false);
+    setQuizChoice(null);
+    setQuizRevealed(false);
   }, [selectedLesson, subjectId]);
 
   useEffect(() => {
@@ -117,7 +110,7 @@ export default function LessonViewer() {
   const handleComplete = () => {
     if (!lesson) return;
     completeLesson(lesson.id, subjectId);
-    updateLessonChallengeStats(lesson.id, challengePool.length, challengeScore);
+    updateLessonChallengeStats(lesson.id, activeQuiz ? 1 : 0, challengeScore);
     setCompleted(prev => new Set(prev).add(lesson.id));
   };
 
@@ -138,29 +131,10 @@ export default function LessonViewer() {
   const Icon = subject?.icon;
   const isCompleted = completed.has(lesson.id);
   const isLastStep = currentStep === steps.length - 1;
-  const challengeIndex = Math.min(currentStep, Math.max(challengePool.length - 1, 0));
-  const challenge = challengePool[challengeIndex];
-  const challengeChoice = challengeSelections[challengeIndex] ?? null;
-  const challengeRevealed = challengeRevealedMap[challengeIndex] ?? false;
-  const challengeScore = challengePool.reduce((total, item, index) => {
-    const picked = challengeSelections[index];
-    return total + (typeof picked === "number" && picked === item.correct ? 1 : 0);
-  }, 0);
   const isLessonUnlocked = (lessonIndex: number) => {
     if (lessonIndex === 0) return true;
     const previousLesson = subjectLessons[lessonIndex - 1];
     return previousLesson ? completed.has(previousLesson.id) : false;
-  };
-
-  const selectChallenge = (optionIndex: number) => {
-    if (challengeRevealed || !challenge) return;
-    setChallengeSelections((current) => ({ ...current, [challengeIndex]: optionIndex }));
-    setChallengeRevealedMap((current) => ({ ...current, [challengeIndex]: true }));
-  };
-
-  const restartChallenges = () => {
-    setChallengeSelections({});
-    setChallengeRevealedMap({});
   };
 
   return (
@@ -224,7 +198,7 @@ export default function LessonViewer() {
                   <Sparkles className="w-4 h-4 text-accent" /> Mission Tracker
                 </h4>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Step progress: {lessonProgress}% · Challenge score: {challengeScore}/{Math.max(challengePool.length, 1)}
+                  Step progress: {lessonProgress}%{activeQuiz ? ` · Quiz score: ${challengeScore}/1` : ""}
                 </p>
                 <div className="w-full bg-background/70 rounded-full h-2">
                   <div className="h-2 rounded-full bg-gradient-to-r from-primary to-accent transition-all" style={{ width: `${lessonProgress}%` }} />
@@ -304,6 +278,73 @@ export default function LessonViewer() {
                         <div className="rounded-2xl bg-background/60 p-4 text-sm leading-7 text-foreground/85 whitespace-pre-line">
                           {step?.content}
                         </div>
+                        {isActivityStep(step) && (
+                          <div className="mt-4 rounded-2xl border border-border/60 bg-background/45 p-4">
+                            <p className="text-sm font-semibold text-foreground">Your Answer</p>
+                            <textarea
+                              value={activityResponse}
+                              onChange={(event) => {
+                                setActivityResponse(event.target.value);
+                                setActivitySubmitted(false);
+                              }}
+                              placeholder="Type your answer based on the lesson discussion..."
+                              className="mt-3 min-h-28 w-full resize-y rounded-xl border border-border bg-card/80 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            />
+                            <div className="mt-3 flex flex-wrap items-center gap-3">
+                              <button
+                                onClick={() => setActivitySubmitted(true)}
+                                disabled={activityResponse.trim().length < 20}
+                                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Submit Answer
+                              </button>
+                              {activitySubmitted && (
+                                <span className="text-xs text-muted-foreground">
+                                  Checked: {activityKeywordHits}/{Math.max(activityKeywords.length, 1)} key concepts used
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {isQuizStep(step) && activeQuiz && (
+                          <div className="mt-4 rounded-2xl border border-border/60 bg-background/45 p-4">
+                            <p className="text-sm font-semibold text-foreground">{activeQuiz.question}</p>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              {activeQuiz.options.map((option, optionIndex) => {
+                                const isCorrect = optionIndex === activeQuiz.correct;
+                                const isSelected = quizChoice === optionIndex;
+                                const optionClass = quizRevealed
+                                  ? isCorrect
+                                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                    : isSelected
+                                      ? "border-destructive bg-destructive/10 text-destructive"
+                                      : "border-border text-muted-foreground"
+                                  : "border-border hover:border-primary/30 text-foreground";
+                                return (
+                                  <button
+                                    key={option}
+                                    onClick={() => {
+                                      if (quizRevealed) return;
+                                      setQuizChoice(optionIndex);
+                                      setQuizRevealed(true);
+                                    }}
+                                    className={`rounded-xl border-2 px-4 py-3 text-left text-sm font-medium transition-all ${optionClass}`}
+                                  >
+                                    {option}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {quizRevealed && (
+                              <div className="mt-3 rounded-xl bg-secondary/60 px-4 py-3 text-sm">
+                                <p className="font-semibold text-foreground">
+                                  {quizChoice === activeQuiz.correct ? "Correct." : "Review the discussion and try again."}
+                                </p>
+                                <p className="mt-1 text-muted-foreground">{activeQuiz.explanation}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </motion.div>
                     </AnimatePresence>
                   )}
@@ -414,98 +455,6 @@ export default function LessonViewer() {
             </div>
           )}
 
-          {isSourceScrapedLesson && lesson.processedContent && (
-            <ProcessedLessonPanel
-              lesson={lesson}
-              activityResponse={activityResponse}
-              assignmentResponse={assignmentResponse}
-              submittedResponses={submittedResponses}
-              onActivityChange={(value) => {
-                setActivityResponse(value);
-                setSubmittedResponses((current) => ({ ...current, activity: false }));
-              }}
-              onAssignmentChange={(value) => {
-                setAssignmentResponse(value);
-                setSubmittedResponses((current) => ({ ...current, assignment: false }));
-              }}
-              onSubmit={(kind) => setSubmittedResponses((current) => ({ ...current, [kind]: true }))}
-            />
-          )}
-
-          {/* Interactive Element */}
-          <ScrollReveal delay={0.2}>
-            <div className="mt-8 glass-card p-8">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
-                  <MousePointerClick className="w-5 h-5 text-primary" /> Challenge Arena
-                </h3>
-                <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-secondary">
-                  <Trophy className="w-3.5 h-3.5 text-accent" />
-                  Score {challengeScore}/{Math.max(challengePool.length, 1)}
-                </div>
-              </div>
-
-              <p className="text-muted-foreground mb-4 text-sm">
-                Checkpoint {challengeIndex + 1} of {Math.max(challengePool.length, 1)} linked to Step {currentStep + 1}
-              </p>
-
-              <div className="rounded-2xl border border-border/60 bg-background/25 backdrop-blur-xl p-5">
-                <p className="font-semibold text-foreground mb-4">{challenge?.question}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(challenge?.options || []).map((option, optionIndex) => {
-                    const isCorrect = optionIndex === challenge?.correct;
-                    const isSelected = challengeChoice === optionIndex;
-                    const revealedClass = challengeRevealed
-                      ? isCorrect
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                        : isSelected
-                          ? "border-destructive bg-destructive/10 text-destructive"
-                          : "border-border text-muted-foreground"
-                      : "border-border hover:border-primary/30 text-foreground";
-
-                    return (
-                      <motion.button
-                        key={option}
-                        whileHover={!challengeRevealed ? { scale: 1.02 } : undefined}
-                        whileTap={!challengeRevealed ? { scale: 0.98 } : undefined}
-                        onClick={() => selectChallenge(optionIndex)}
-                        className={`rounded-xl border-2 px-4 py-3 text-left font-medium transition-all ${revealedClass}`}
-                      >
-                        {option}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-
-                {challengeRevealed && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 rounded-xl bg-secondary/60 px-4 py-3 text-sm"
-                  >
-                    <p className="font-semibold text-foreground flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-primary" />
-                      {challengeChoice === challenge?.correct ? "Great job!" : "Nice try - keep going!"}
-                    </p>
-                    <p className="text-muted-foreground mt-1">{challenge?.explanation}</p>
-                  </motion.div>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  onClick={restartChallenges}
-                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
-                >
-                  Reset Checkpoints
-                </button>
-                <span className="text-xs text-muted-foreground self-center">
-                  This checkpoint updates as you move through lesson slides.
-                </span>
-              </div>
-            </div>
-          </ScrollReveal>
-
           {!isSourceScrapedLesson && (
             <>
               <ScrollReveal delay={0.24}>
@@ -530,237 +479,19 @@ function displayLessonTitle(title: string) {
   return title.replace(/^G\d+\s+[^:]+:\s*/i, "");
 }
 
-function ProcessedLessonPanel({
-  lesson,
-  activityResponse,
-  assignmentResponse,
-  submittedResponses,
-  onActivityChange,
-  onAssignmentChange,
-  onSubmit,
-}: {
-  lesson: Lesson;
-  activityResponse: string;
-  assignmentResponse: string;
-  submittedResponses: Record<"activity" | "assignment", boolean>;
-  onActivityChange: (value: string) => void;
-  onAssignmentChange: (value: string) => void;
-  onSubmit: (kind: "activity" | "assignment") => void;
-}) {
-  const processed = lesson.processedContent;
-  if (!processed) return null;
-
-  if (processed.fallbackReason) {
-    return (
-      <div className="mt-8 rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
-        {processed.fallbackReason}
-      </div>
-    );
-  }
-
-  return (
-    <ScrollReveal delay={0.16}>
-      <section className="mt-8 space-y-5">
-        <div className="glass-card p-6">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-foreground">Lesson Processor</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Main topic, concepts, and objectives extracted from the lesson content.
-              </p>
-            </div>
-            <BookOpen className="h-5 w-5 text-primary" />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-border/60 bg-background/45 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Key Concepts</p>
-              <div className="mt-3 space-y-2">
-                {(processed.keyConcepts.length ? processed.keyConcepts : [processed.mainTopic]).map((concept) => (
-                  <p key={concept} className="rounded-xl bg-card/80 px-3 py-2 text-sm text-foreground">
-                    {concept}
-                  </p>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-border/60 bg-background/45 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Learning Objectives</p>
-              <div className="mt-3 space-y-2">
-                {processed.learningObjectives.map((objective) => (
-                  <p key={objective} className="text-sm leading-6 text-muted-foreground">
-                    {objective}
-                  </p>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {processed.visualModel && (
-            <div className="mt-4 rounded-2xl border border-border/60 bg-background/45 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{processed.visualModel.title}</p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {processed.visualModel.nodes.map((node, index) => (
-                  <div key={`${node}-${index}`} className="flex items-center gap-2">
-                    <span className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground">
-                      {node}
-                    </span>
-                    {index < processed.visualModel!.nodes.length - 1 && <span className="text-muted-foreground">-&gt;</span>}
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{processed.visualModel.caption}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          {processed.activity && (
-            <ResponseCard
-              title="Interactive Activity"
-              prompt={processed.activity.prompt}
-              value={activityResponse}
-              submitted={submittedResponses.activity}
-              expectedKeywords={processed.activity.expectedKeywords}
-              onChange={onActivityChange}
-              onSubmit={() => onSubmit("activity")}
-            />
-          )}
-
-          {processed.assignment && (
-            <ResponseCard
-              title="Assignment"
-              prompt={processed.assignment.prompt}
-              checklist={processed.assignment.checklist}
-              value={assignmentResponse}
-              submitted={submittedResponses.assignment}
-              expectedKeywords={processed.assignment.expectedKeywords ?? processed.keyConcepts}
-              onChange={onAssignmentChange}
-              onSubmit={() => onSubmit("assignment")}
-            />
-          )}
-        </div>
-      </section>
-    </ScrollReveal>
-  );
+function isActivityStep(step?: LessonStep) {
+  return Boolean(step?.title.toLowerCase().includes("step 4"));
 }
 
-function ResponseCard({
-  title,
-  prompt,
-  checklist,
-  value,
-  submitted,
-  expectedKeywords,
-  onChange,
-  onSubmit,
-}: {
-  title: string;
-  prompt: string;
-  checklist?: string[];
-  value: string;
-  submitted: boolean;
-  expectedKeywords: string[];
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  const matchedKeywords = expectedKeywords.filter((keyword) => value.toLowerCase().includes(keyword.toLowerCase()));
-  const canSubmit = value.trim().length >= 20;
-
-  return (
-    <div className="glass-card p-6">
-      <h3 className="font-bold text-foreground">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt}</p>
-
-      {checklist && (
-        <div className="mt-3 rounded-xl bg-background/50 p-3">
-          {checklist.map((item) => (
-            <p key={item} className="text-xs leading-5 text-muted-foreground">
-              {item}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Type your answer here..."
-        className="mt-4 min-h-32 w-full resize-y rounded-xl border border-border bg-card/80 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
-
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Submit Answer
-        </button>
-        {submitted && (
-          <span className="text-xs text-muted-foreground">
-            Checked: {matchedKeywords.length}/{Math.max(expectedKeywords.length, 1)} key concepts found.
-          </span>
-        )}
-      </div>
-    </div>
-  );
+function isQuizStep(step?: LessonStep) {
+  return Boolean(step?.title.toLowerCase().includes("step 5"));
 }
 
 function lessonQuarter(lesson: Lesson) {
   const match = lesson.title.match(/Quarter\s+(\d+)/i);
-  return match ? Number(match[1]) : null;
-}
-
-type Challenge = {
-  type: "mcq" | "fill_blank";
-  question: string;
-  options: string[];
-  correct: number;
-  explanation: string;
-};
-
-function buildLessonChallenges(lesson: Lesson, steps: LessonStep[], subjectLessons: Lesson[]): Challenge[] {
-  const contentQuizChallenge: Challenge[] = lesson.contentQuiz
-    ? [
-        {
-          type: "mcq" as const,
-          question: lesson.contentQuiz.question,
-          options: lesson.contentQuiz.options,
-          correct: lesson.contentQuiz.correct,
-          explanation: lesson.contentQuiz.explanation,
-        },
-      ]
-    : [];
-  const lessonFacts = steps.map((step) => extractLessonFact(step.content)).filter(Boolean);
-  const lessonDistractors = [
-    ...(lesson.misconceptions || []),
-    ...steps.flatMap((step) => step.keywords || []),
-  ];
-  const subjectFactPool = subjectLessons
-    .flatMap((item) => item.steps.map((step) => extractLessonFact(step.content)))
-    .filter(Boolean);
-
-  const stepChallenges: Challenge[] = steps.map((step, index) => {
-    const fact = lessonFacts[index] || extractLessonFact(step.content) || extractLessonFact(lesson.description);
-    const candidateDistractors = [...lessonDistractors, ...subjectFactPool.filter((candidate) => candidate !== fact)];
-    const factOptions = buildOptions(fact, candidateDistractors, lesson.id + index);
-    const englishChallenge = buildEnglishFillBlankChallenge(step, fact, lesson.id + index);
-
-    if (lesson.subject === "english" && englishChallenge && index % 2 === 0) {
-      return englishChallenge;
-    }
-
-    return {
-      type: "mcq" as const,
-      question: buildStem(step, lesson, index),
-      options: factOptions.options,
-      correct: factOptions.correct,
-      explanation: `Lesson checkpoint: ${fact}`,
-    };
-  });
-
-  return [...contentQuizChallenge, ...stepChallenges].slice(0, Math.max(1, steps.length));
+  if (match) return Number(match[1]);
+  if (typeof lesson.order === "number" && lesson.order >= 1 && lesson.order <= 4) return lesson.order;
+  return null;
 }
 
 function buildTeachingSlides(lesson: Lesson): LessonStep[] {
@@ -801,104 +532,4 @@ function buildTeachingSlides(lesson: Lesson): LessonStep[] {
   ];
 
   return [...baseSlides, ...generatedSlides].slice(0, 6);
-}
-
-function buildStem(step: LessonStep, lesson: Lesson, index: number) {
-  const stems = [
-    `Which statement best matches what this step teaches about "${step.title}"?`,
-    `A student is reviewing "${lesson.title}". Which idea is correct for this checkpoint?`,
-    `Select the most accurate concept from this part of the lesson.`,
-    `Which statement should students remember after this slide?`,
-  ];
-  return stems[index % stems.length];
-}
-
-function buildEnglishFillBlankChallenge(step: LessonStep, fact: string, seed: number): Challenge | null {
-  const blankWord = pickBlankWord(step, fact);
-  if (!blankWord) return null;
-
-  const question = `Fill in the blank for "${step.title}": ${maskWordInSentence(fact, blankWord)}`;
-  const distractorPool = [
-    "idea",
-    "topic",
-    "sentence",
-    "detail",
-    "evidence",
-    "claim",
-    "summary",
-    "inference",
-  ];
-  const wrong = [...new Set(distractorPool.filter((item) => item.toLowerCase() !== blankWord.toLowerCase()))].slice(0, 3);
-  const base = [...wrong];
-  while (base.length < 3) base.push(`word${base.length + 1}`);
-  const insertAt = seed % 4;
-  const options = [...base];
-  options.splice(insertAt, 0, blankWord);
-
-  return {
-    type: "fill_blank",
-    question,
-    options: options.slice(0, 4),
-    correct: insertAt,
-    explanation: `The best word is "${blankWord}" based on the step focus.`,
-  };
-}
-
-function buildOptions(correct: string, pool: string[], seed: number): { options: string[]; correct: number } {
-  const distractors = [...new Set(pool.filter((item) => item !== correct && item.length > 0))].slice(0, 3);
-  const base = [...distractors];
-  while (base.length < 3) base.push(createDistractorFromFact(correct, base.length + seed));
-  const insertAt = seed % 4;
-  const options = [...base];
-  options.splice(insertAt, 0, correct);
-  return { options: options.slice(0, 4), correct: insertAt };
-}
-
-function pickBlankWord(step: LessonStep, fact: string) {
-  const keywordCandidate = (step.keywords || []).find((word) => word.length >= 4 && /^[a-z-]+$/i.test(word));
-  if (keywordCandidate) return keywordCandidate;
-
-  const tokens = fact.match(/[A-Za-z][A-Za-z'-]{3,}/g) || [];
-  const stopWords = new Set(["this", "that", "with", "from", "about", "which", "should", "after", "before", "their"]);
-  return tokens.find((token) => !stopWords.has(token.toLowerCase())) || null;
-}
-
-function maskWordInSentence(sentence: string, word: string) {
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`\\b${escaped}\\b`, "i");
-  if (!pattern.test(sentence)) {
-    return `${sentence} (missing key term: ____ )`;
-  }
-  return sentence.replace(pattern, "____");
-}
-
-function extractLessonFact(text: string) {
-  const firstSentence = text
-    .replace(/\n+/g, " ")
-    .split(/[.!?]/)
-    .map((segment) => segment.trim())
-    .find(Boolean);
-
-  if (!firstSentence) return "";
-  return firstSentence.length > 130 ? `${firstSentence.slice(0, 127)}...` : firstSentence;
-}
-
-function createDistractorFromFact(fact: string, seed: number) {
-  const swaps: Array<[RegExp, string]> = [
-    [/\b(increases|greater|up|right)\b/gi, "decreases"],
-    [/\b(decreases|lower|down|left)\b/gi, "increases"],
-    [/\b(always|all|every)\b/gi, "sometimes"],
-    [/\b(can|may)\b/gi, "cannot"],
-  ];
-
-  let distractor = fact;
-  const [pattern, replacement] = swaps[seed % swaps.length];
-  distractor = distractor.replace(pattern, replacement);
-
-  if (distractor === fact) {
-    if (seed % 2 === 0) return `This statement reverses the key lesson idea.`;
-    return `This statement confuses the main concept with an incorrect interpretation.`;
-  }
-
-  return distractor;
 }

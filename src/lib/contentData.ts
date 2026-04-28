@@ -1,408 +1,457 @@
 import { subjects } from "@/lib/mockData";
 import type { Lesson } from "@/lib/mockData";
-import { getLrModulesFor } from "@/lib/depedLrModuleIndex";
+import { lessonContentProcessed } from "@/lib/lessonContentProcessed";
+import { lessonContentRaw } from "@/lib/lessonContentRaw";
 
 export { subjects, grades, badges, studentData, surveyCategories } from "@/lib/mockData";
 export type { Lesson, LessonStep } from "@/lib/mockData";
 
 const targetGrades = [7, 8, 9, 10] as const;
+const subjectIds = ["math", "science", "english", "filipino", "ap", "ict", "mapeh", "tle"] as const;
 
-function deriveSourceTopic(sourceRef: string, fallback: string): string {
-  const raw = sourceRef
-    .replace(/\([^)]*https?:\/\/[^)]*\)/gi, "")
-    .replace(/https?:\/\/\S+/gi, "")
-    .replace(/Source index:\s*/gi, "")
-    .trim();
-  const pdfMatch = raw.match(/([A-Za-z0-9 _().&-]+)\.pdf/i);
-  const base = (pdfMatch?.[1] ?? raw).trim();
-  const cleaned = base
-    .replace(/[_-]+/g, " ")
-    .replace(/\b(Q[1-4]|Quarter\s*[1-4]|LAS\d*|LAS|TN|RTP|FIN|DLP|CONSOLIDATED|Copy|Final|Camera Ready)\b/gi, " ")
-    .replace(/\b(FCS|HE|TLE|TVL|SLEM|ADM|CO|MELC)\s*\d*\b/gi, " ")
-    .replace(/\b(Eng|Math|Science|Filipino|AP|ICT|TLE|MA|PEH)\s*\d{0,2}\b/gi, " ")
-    .replace(/\bG\d{1,2}\b/gi, " ")
-    .replace(/\bGrade\s*\d{1,2}\b/gi, " ")
-    .replace(/\b\d{1,2}\s+\d{1,2}\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned.length >= 8 ? cleaned : fallback;
-}
+type SubjectId = (typeof subjectIds)[number];
+type ProcessedEntry = {
+  title: string;
+  fallbackReason?: string;
+  discussion: string;
+  keyConcepts: string[];
+  learningObjectives?: string[];
+  examples: string[];
+  visualModel?: { title: string; nodes: string[]; caption: string };
+  activity?: { prompt: string; expectedKeywords: string[] };
+  assignment?: { prompt: string; checklist: string[]; expectedKeywords?: string[] };
+  quiz?: Array<{ question: string; options: string[]; correct: number; explanation: string }>;
+};
+type RawEntry = { title: string; sourcePage: string };
 
-function cleanSnippetText(snippet?: string) {
-  const raw = (snippet ?? "").replace(/\s+/g, " ").trim();
-  if (!raw) return "";
+const processedData = lessonContentProcessed as unknown as Record<string, Record<SubjectId, Record<string, ProcessedEntry>>>;
+const rawData = lessonContentRaw as unknown as Record<string, Record<SubjectId, Record<string, RawEntry>>>;
 
-  return raw
-    .replace(/Dynamic Learning Program[^.]*\.?/gi, " ")
-    .replace(/DepEd\s+Complex[^.]*\.?/gi, " ")
-    .replace(/Republic of the Philippines|Department of Education/gi, " ")
-    .replace(/S\.?Y\.?\s*\d{4}\s*[–-]\s*\d{4}/gi, " ")
-    .replace(/Learning Activity Sheet/gi, " ")
-    .replace(/LAS\s*No\.?\s*\d+/gi, " ")
-    .replace(/Pangalan:\s*_{0,}/gi, " ")
-    .replace(/Iskor:\s*_{0,}/gi, " ")
-    .replace(/Baitang at Seksiyon:\s*_{0,}/gi, " ")
-    .replace(/Petsa:\s*_{0,}/gi, " ")
-    .replace(/Uri ng Gawain:[^.]*\.?/gi, " ")
-    .replace(/https?:\/\/\S+/gi, " ")
-    .replace(/_{3,}/g, " blank ")
-    .replace(/[□■●]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+function sanitizeProcessedTitle(rawTitle: string, keyConcepts: string[] = [], discussion = "") {
+  const sanitizeCore = (value: string) =>
+    value
+      .replace(/[_-]+/g, " ")
+      .replace(/\b(fin|q[1-4]|quarter\s*[1-4]|las(?:&tn)?\d*|las|tn|rtp|consolidated|copy|final|camera\s*ready)\b/gi, " ")
+      .replace(/\b(eng|math|science|filipino|ap|ict|tle|ma|peh)\s*\d{0,2}\b/gi, " ")
+      .replace(/\b(g\d{1,2}|grade\s*\d{1,2})\b/gi, " ")
+      .replace(/[&/\\]/g, " ")
+      .replace(/\b\d+\b/g, " ")
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-function splitSnippetIntoSections(snippet: string) {
-  const headingRegex =
-    /(Tala ng Konsepto|Buod|Gawain|Pagsasanay|Panuto|Reflection|Paglalahat|Konklusyon)\s*:?/gi;
-  const matches = [...snippet.matchAll(headingRegex)];
-  if (matches.length === 0) {
-    return [
-      {
-        title: "Lesson Content",
-        content: snippet,
-      },
-    ];
-  }
+  const cleaned = sanitizeCore(rawTitle);
+  const conceptCandidate = keyConcepts[0]?.split(/[:\-]/)[0]?.trim() ?? "";
+  const safeConcept = sanitizeCore(conceptCandidate);
 
-  const sections: Array<{ title: string; content: string }> = [];
-  for (let i = 0; i < matches.length; i += 1) {
-    const current = matches[i];
-    const next = matches[i + 1];
-    const start = current.index ?? 0;
-    const end = next?.index ?? snippet.length;
-    const block = snippet.slice(start, end).trim();
-    const heading = (current[1] ?? "Lesson Content").replace(/\s+/g, " ").trim();
-    const body = block.replace(headingRegex, "").trim();
-    if (body.length > 0) {
-      sections.push({ title: heading, content: body });
-    }
-  }
-  return sections.length
-    ? sections
-    : [
-        {
-          title: "Lesson Content",
-          content: snippet,
-        },
-      ];
-}
-
-function cleanLessonTitle(topic: string) {
-  const cleaned = topic
-    .replace(/\b(LAS\d*|LAS|FCS|HE|TLE|TVL|Q[1-4])\b/gi, " ")
-    .replace(/\b\d+\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const normalized = toTitleCase(cleaned.length >= 4 ? cleaned : topic);
-  if (/^(introduction|pagkilala|panimula|pagsulat|paggamit|understanding|exploring)\b/i.test(normalized)) {
-    return normalized;
-  }
-
-  if (/^[A-Za-z][A-Za-z\s&,-]+$/.test(normalized) && normalized.split(/\s+/).length <= 6) {
-    return `Introduction to ${normalized}`;
-  }
-
-  return normalized;
-}
-
-function toTitleCase(value: string) {
-  const smallWords = new Set(["ang", "at", "ng", "sa", "of", "and", "or", "the", "to", "in"]);
-  return value
-    .toLowerCase()
-    .split(/\s+/)
-    .map((word, index) => {
-      if (index > 0 && smallWords.has(word)) return word;
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ")
-    .replace(/\b(Ict|Ap|Tle|Mapeh)\b/g, (match) => match.toUpperCase());
-}
-
-function splitSentences(text: string) {
-  return text
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length >= 18 && !/^(A|B|C|D)\.\s*$/i.test(sentence));
-}
-
-function conciseText(text: string, maxSentences = 4) {
-  const sentences = splitSentences(text);
-  return sentences.slice(0, maxSentences).join(" ");
-}
-
-function findSectionText(sections: Array<{ title: string; content: string }>, names: RegExp) {
-  return sections
-    .filter((section) => names.test(section.title))
-    .map((section) => section.content)
+  const inferred = inferTopicFromDiscussion(discussion);
+  const base = cleaned.length >= 5 && !looksLikeRawTokenTitle(cleaned)
+    ? cleaned
+    : safeConcept.length >= 5 && !looksLikeRawTokenTitle(safeConcept)
+      ? safeConcept
+      : inferred.length >= 5
+        ? inferred
+        : "Lesson Topic";
+  return base
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
 
-function extractKeyConcepts(text: string, topic: string) {
-  const definitionConcepts = [...text.matchAll(/([A-ZÀ-ÚA-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s-]{3,45})\s+(?:ay|is|are|means|refers to)\s+([^.!?]{24,150})/gi)]
-    .map((match) => `${toTitleCase(match[1].trim())}: ${match[2].trim()}`)
-    .filter((concept) => !/learning|activity|pagsasanay|panuto/i.test(concept));
-  const parentheticalConcepts = [...text.matchAll(/([A-ZÀ-ÚA-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s-]{3,45})\s*\(([^)]{3,50})\)/g)]
-    .map((match) => `${toTitleCase(match[1].trim())}: ${match[2].trim()}`);
-  const titleConcepts = topic
-    .split(/\s+(?:at|and|ng|sa|of|to|in)\s+/i)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 5)
-    .map((part) => toTitleCase(part));
-
-  return [...new Set([...definitionConcepts, ...parentheticalConcepts, ...titleConcepts])]
-    .filter((concept) => concept.length >= 5)
-    .slice(0, 5);
+function looksLikeRawTokenTitle(value: string) {
+  return /\b(las|fin|tn|rtp|q[1-4]|consolidated|final)\b/i.test(value) || value.split(" ").length <= 2;
 }
 
-function buildExampleText(topic: string, fullText: string) {
-  const exampleSentences = splitSentences(fullText).filter((sentence) =>
-    /(halimbawa|example|tulad|gamit ang|for instance|1\.|2\.|3\.)/i.test(sentence),
-  );
-  if (exampleSentences.length > 0) return exampleSentences.slice(0, 3).join(" ");
-  return `Example: When studying ${topic}, connect each key term to a real situation, object, place, or action from the lesson. Then explain why the example fits the concept.`;
-}
-
-function buildLearningObjectives(topic: string, keyConcepts: string[]) {
-  const firstConcept = keyConcepts[0]?.split(":")[0] ?? topic;
-  return [
-    `Explain the main idea of ${topic}.`,
-    `Identify how ${firstConcept} connects to the lesson topic.`,
-    `Use an example to show understanding of ${topic}.`,
-  ];
-}
-
-function buildVisualModel(topic: string, keyConcepts: string[]) {
-  const nodes = [topic, ...keyConcepts.map((concept) => concept.split(":")[0])].slice(0, 5);
-  if (nodes.length < 3) return undefined;
-
-  return {
-    title: `${topic} Concept Map`,
-    nodes,
-    caption: `Read this from left to right: the main topic leads to the key ideas students should connect during the lesson.`,
-  };
-}
-
-function keywordFromConcept(concept: string) {
-  return concept
-    .split(":")[0]
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+function inferTopicFromDiscussion(discussion: string) {
+  const clean = discussion
+    .replace(/\b(Concept Development|Tala ng Konsepto|Buod|KONSEPTONG ARALIN|Dynamic Learning Program)\b/gi, " ")
+    .replace(/\s+/g, " ")
     .trim();
+  const phraseMatch = clean.match(/(?:Ang|A|An)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s-]{3,60}?)\s+(?:ay|is|are)\b/i);
+  if (phraseMatch) return `Understanding ${phraseMatch[1].trim()}`;
+  const firstChunk = clean.split(/[.!?]/)[0]?.trim() ?? "";
+  return firstChunk.split(" ").slice(0, 7).join(" ");
 }
 
-function buildActivity(topic: string, activityText: string, keyConcepts: string[]) {
-  const expectedKeywords = keyConcepts.map(keywordFromConcept).filter(Boolean).slice(0, 4);
-  const sourcePrompt = conciseText(activityText, 2);
-  return {
-    prompt:
-      sourcePrompt ||
-      `In your own words, explain ${topic}. Include one real example and connect it to at least two key concepts from the lesson.`,
-    expectedKeywords,
-  };
+function toQuarterLabel(quarter: string) {
+  return `Quarter ${quarter}`;
 }
 
-function buildAssignment(topic: string, keyConcepts: string[]) {
-  return {
-    prompt: `Write a short study note about ${topic}. Explain the main idea, include one example, and mention the key concept that helped you understand it most.`,
-    checklist: [
-      "States the main idea clearly",
-      "Uses at least one lesson concept",
-      "Includes a concrete example",
-      "Explains why the example fits",
-    ],
-    expectedKeywords: keyConcepts.map(keywordFromConcept).filter(Boolean).slice(0, 4),
-  };
-}
-
-function buildProcessedContent(topic: string, cleanSnippet: string, sections: Array<{ title: string; content: string }>) {
-  const keyConcepts = extractKeyConcepts(cleanSnippet, topic);
-  const activityText = findSectionText(sections, /gawain|pagsasanay|panuto|activity/i);
-  const learningObjectives = buildLearningObjectives(topic, keyConcepts);
-
-  return {
-    mainTopic: topic,
-    keyConcepts,
-    learningObjectives,
-    visualModel: buildVisualModel(topic, keyConcepts),
-    activity: buildActivity(topic, activityText, keyConcepts),
-    assignment: buildAssignment(topic, keyConcepts),
-  };
-}
-
-function buildStructuredSteps(topic: string, cleanSnippet: string, sections: Array<{ title: string; content: string }>) {
-  const conceptText = findSectionText(sections, /tala ng konsepto|buod|discussion|konsepto/i) || cleanSnippet;
-  const discussion = conciseText(conceptText, 5) || conciseText(cleanSnippet, 5);
-  const examples = buildExampleText(topic, cleanSnippet);
-
+function fallbackSteps(title: string) {
   return [
     {
-      title: "Lesson Introduction",
-      content: `In this lesson, you will study ${topic}. Focus on the main idea, the key terms, and how the concept appears in real examples.`,
+      title: "Step 1 - Introduction",
+      content: "Lesson content not available yet.",
       icon: "book-open",
-      learningObjective: `Understand the purpose and focus of ${topic}.`,
+      learningObjective: `Wait for processed lesson content for ${title}.`,
       difficulty: "easy" as const,
-      keywords: [topic, "introduction"],
-    },
-    {
-      title: "Discussion",
-      content: discussion,
-      icon: "lightbulb",
-      learningObjective: `Explain the important ideas behind ${topic}.`,
-      difficulty: "medium" as const,
-      keywords: [topic, "discussion"],
-    },
-    {
-      title: "Examples",
-      content: examples,
-      icon: "list-checks",
-      learningObjective: `Connect ${topic} to concrete examples.`,
-      difficulty: "medium" as const,
-      keywords: [topic, "examples"],
+      keywords: [title, "unavailable"],
     },
   ];
 }
 
-function buildTopicQuiz(topic: string, subjectName: string, steps: ReturnType<typeof buildStructuredSteps>, seed: number) {
-  const discussionFact = firstSentence(steps.find((step) => step.title === "Discussion")?.content, `The lesson explains ${topic}.`);
-  const exampleFact = firstSentence(steps.find((step) => step.title === "Examples")?.content, `Examples help explain ${topic}.`);
-  const correct = discussionFact;
-  const distractors = buildTopicDistractors(topic, subjectName, exampleFact, correct);
-  const shifted = withShiftedCorrectOption([correct, ...distractors], 0, seed);
-  return {
-    question: `What is the main idea of "${topic}"?`,
-    options: shifted.options,
-    correct: shifted.correct,
-    explanation: correct,
-  };
-}
-
-function buildTopicDistractors(topic: string, subjectName: string, exampleFact: string, correct: string) {
-  const subject = subjectName.toLowerCase();
-  const subjectSpecific =
-    subject.includes("araling")
-      ? [
-          `It only names places or events without explaining their relationships.`,
-          `It focuses on memorizing labels instead of interpreting social or geographic meaning.`,
-        ]
-      : subject.includes("tle")
-        ? [
-            `It only lists tools or services without explaining when they are used.`,
-            `It focuses on workplace terms but misses the skill or service being practiced.`,
-          ]
-        : subject.includes("science")
-          ? [
-              `It describes an observation but does not explain the process behind it.`,
-              `It focuses on isolated terms without connecting cause and effect.`,
-            ]
-          : subject.includes("mathematics")
-            ? [
-                `It gives a procedure but does not explain why the rule works.`,
-                `It treats the topic as a single answer instead of a repeatable method.`,
-              ]
-            : [
-                `It focuses on isolated details without explaining the main concept.`,
-                `It gives an example but misses the broader idea of ${topic}.`,
-              ];
-
-  return [...subjectSpecific, exampleFact === correct ? `It explains a related classroom task but not the lesson concept.` : exampleFact].slice(0, 3);
-}
-
-function isUnavailableTopic(topic: string) {
-  const clean = topic.toLowerCase();
-  return clean === "" || clean.includes("las tn") || clean.includes("consolidated") || clean === "lesson content not available yet";
-}
-
-function buildScrapedLessonBundle(
-  grade: number,
-  subjectName: string,
-  topic: string,
-  quarter: string,
-  snippet?: string,
+function buildSteps(
+  title: string,
+  discussion: string,
+  examples: string[],
+  learningObjectives: string[],
+  keyConcepts: string[],
+  visualModel?: { nodes: string[] },
 ) {
-  const cleanSnippet = cleanSnippetText(snippet);
-  const hasActualContent = cleanSnippet.length >= 120;
-  const cleanTitle = cleanLessonTitle(topic);
-  const sourceSections = hasActualContent ? splitSnippetIntoSections(cleanSnippet) : [];
-  const sectionSteps = hasActualContent ? buildStructuredSteps(cleanTitle, cleanSnippet, sourceSections) : [];
-  const processedContent = hasActualContent
-    ? buildProcessedContent(cleanTitle, cleanSnippet, sourceSections)
-    : {
-        mainTopic: cleanTitle,
-        keyConcepts: [],
-        learningObjectives: [],
-        fallbackReason: "Lesson content not available yet.",
-      };
+  const cleanedExamples = examples.map((item) => cleanForLessonDisplay(item)).filter(Boolean);
+  const cleanedDiscussion = cleanForLessonDisplay(discussion);
+  const repairedConcepts = normalizeKeyConcepts(keyConcepts, cleanedDiscussion, title);
+  const teachingCards = buildDiscussionCards(cleanedDiscussion, repairedConcepts);
+  const visualNodes = sanitizeVisualNodes(visualModel?.nodes ?? [], title, repairedConcepts);
 
-  return {
-    title: cleanTitle,
-    summary: `${quarter}: ${cleanTitle} for Grade ${grade} ${subjectName}.`,
-    learningFocus: `Understand and apply ${cleanTitle}.`,
-    misconception: hasActualContent ? `Common misconception should be verified from source details.` : `Actual lesson content not available from source.`,
-    quiz: hasActualContent ? buildTopicQuiz(cleanTitle, subjectName, sectionSteps, grade + cleanTitle.length) : undefined,
-    processedContent,
-    steps: hasActualContent
-      ? sectionSteps
-      : [
-          {
-            title: cleanTitle,
-            content: `Lesson content not available yet.`,
-            icon: "book-open",
-            learningObjective: `Retrieve complete lesson details for ${cleanTitle}.`,
-            difficulty: "easy" as const,
-            keywords: [cleanTitle, `grade-${grade}`],
-          },
-        ],
-  };
+  const exampleContent = cleanedExamples.length
+    ? cleanedExamples.map((item, index) => `${index + 1}. ${item}`).join("\n")
+    : `No concrete examples were extracted for ${title} yet.`;
+  const objectivesText = learningObjectives.length
+    ? learningObjectives.map((objective, index) => `${index + 1}. ${objective}`).join("\n")
+    : `1. Understand ${title}\n2. Explain the core concept\n3. Apply the lesson to examples`;
+  const conceptText = repairedConcepts.length
+    ? repairedConcepts.slice(0, 4).map((concept, index) => `${index + 1}. ${concept}`).join("\n")
+    : `1. Main concept\n2. Supporting idea\n3. Practical relevance`;
+  const visualText = visualNodes.length
+    ? `Starter visual:\n${visualNodes.slice(0, 5).join(" -> ")}`
+    : "Starter visual: Topic -> Key Concept -> Example";
+  const discussionText = teachingCards.join("\n\n");
+  const discussionExample = cleanedExamples[0] ?? `Think of a real-life situation where ${title} appears and explain how the concept applies.`;
+  const discussionVisual = visualNodes.length
+    ? `Visual connection: ${visualNodes.join(" -> ")}`
+    : "Visual connection: main idea -> key details -> example.";
+
+  return [
+    {
+      title: "Step 1 - Introduction",
+      content: `Lesson overview: ${title}\n\nLearning objectives:\n${objectivesText}\n\nStarter example and visual:\n${visualText}`,
+      icon: "book-open",
+      learningObjective: `Understand the lesson topic: ${title}.`,
+      difficulty: "easy" as const,
+      keywords: [title, "introduction"],
+    },
+    {
+      title: "Step 2 - Main Discussion",
+      content: `Topic: ${title}\n\n${discussionText}\n\nWorked example:\n${discussionExample}\n\n${discussionVisual}\n\nKey concepts:\n${conceptText}`,
+      icon: "lightbulb",
+      learningObjective: `Explain the important ideas behind ${title}.`,
+      difficulty: "medium" as const,
+      keywords: [title, "discussion"],
+    },
+    {
+      title: "Step 3 - Guided Examples / Practice",
+      content: `${exampleContent}\n\nGuided practice:\n1. Identify the concept used in each example.\n2. Explain why the example matches the lesson.\n3. Write one more example in your own words.`,
+      icon: "list-checks",
+      learningObjective: `Connect ${title} to concrete examples.`,
+      difficulty: "medium" as const,
+      keywords: [title, "examples"],
+    },
+    {
+      title: "Step 4 - Interactive Activity or Assignment",
+      content: `Complete the in-player activity/assignment below. Your answer should use key lesson concepts and one concrete example.`,
+      icon: "clipboard-check",
+      learningObjective: `Apply lesson understanding through an interactive task.`,
+      difficulty: "medium" as const,
+      keywords: [title, "activity"],
+    },
+    {
+      title: "Step 5 - Quiz / Assessment",
+      content: `Answer the assessment question below based on the lesson discussion and guided examples.`,
+      icon: "list-checks",
+      learningObjective: `Demonstrate understanding through topic-based assessment.`,
+      difficulty: "medium" as const,
+      keywords: [title, "quiz"],
+    },
+  ];
+}
+
+function cleanForLessonDisplay(value: string) {
+  const sanitized = normalizeExtractedText(stripDanglingReferences(value))
+    .replace(/\b(concept development|dynamic learning program|las\s*&?\s*tn)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!sanitized) return "";
+  return sanitized;
+}
+
+function stripDanglingReferences(value: string) {
+  const sentences = value
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  const danglingPatterns = [
+    /\b(on the left|on the right|below|above|see image|see chart|see map|see diagram|refer to (the )?(poem|passage|chart|map|diagram|image)|read (the )?(poem|passage)|refer to the text)\b/i,
+    /\b(in the figure|in the graph|in the table|from the picture)\b/i,
+    /\b(things described in the poem|details from the poem|based on the poem)\b/i,
+  ];
+
+  const kept = sentences.filter((sentence) => !danglingPatterns.some((pattern) => pattern.test(sentence)));
+  return kept.join(" ");
+}
+
+function normalizeExtractedText(value: string) {
+  const normalized = value
+    .replace(/[\u2022•]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+
+  const parts = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const cleanedParts: string[] = [];
+  for (const part of parts) {
+    const compact = part.replace(/\s+/g, " ").trim();
+    if (isParserNoiseFragment(compact)) continue;
+    if (cleanedParts.length > 0 && areNearDuplicateSentences(cleanedParts[cleanedParts.length - 1], compact)) continue;
+    cleanedParts.push(compact);
+  }
+  return cleanedParts.join(" ");
+}
+
+function isParserNoiseFragment(value: string) {
+  if (!value) return true;
+  if (/^(this|what|if|and|or|&)\.?$/i.test(value)) return true;
+  if (/^(this|what|if)\s*:/i.test(value) && value.length < 24) return true;
+  if (/^(figure|image|chart|map)\s*\d*$/i.test(value)) return true;
+  return false;
+}
+
+function areNearDuplicateSentences(a: string, b: string) {
+  const normalize = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  return na.length > 20 && nb.length > 20 && (na.includes(nb) || nb.includes(na));
+}
+
+function normalizeKeyConcepts(keyConcepts: string[], discussion: string, title: string) {
+  const normalized = keyConcepts
+    .map((raw) => raw.replace(/^[^A-Za-zÀ-ÿ]+/, "").trim())
+    .filter((raw) => raw && raw !== "&")
+    .map((raw) => {
+      const parts = raw.split(":");
+      const labelRaw = parts[0]?.trim() ?? "";
+      const detailRaw = parts.slice(1).join(":").trim();
+      const detail = cleanForLessonDisplay(detailRaw || labelRaw);
+      if (!detail || detail.length < 12) return "";
+
+      let label = labelRaw;
+      if (isWeakConceptLabel(labelRaw)) {
+        label = inferConceptLabel(detail);
+      }
+      label = label
+        .replace(/\b(the|a|an)\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!label || label.length < 3) label = inferConceptLabel(detail);
+      return `${toHeadline(label)} - ${detail}`;
+    })
+    .filter(Boolean);
+
+  if (normalized.length > 0) {
+    return [...new Set(normalized)].slice(0, 6);
+  }
+
+  const inferred = inferConceptsFromDiscussion(discussion, title);
+  return inferred.length ? inferred : [`${title} - Understand the main idea and explain it clearly.`];
+}
+
+function isWeakConceptLabel(label: string) {
+  return /^(this|what|the|if|it|and|or|example|concept|idea)$/i.test(label.trim());
+}
+
+function inferConceptLabel(detail: string) {
+  const cleaned = detail
+    .replace(/^(this|it)\s+(refers to|means)\s+/i, "")
+    .replace(/^(the|a|an)\s+/i, "")
+    .trim();
+  const known = cleaned.match(/\b(internal conflict|external conflict|character vs nature|character vs society|character vs self|main idea|theme|plot|setting)\b/i);
+  if (known) return known[1];
+
+  const words = cleaned
+    .split(" ")
+    .filter(Boolean)
+    .filter((word) => !/^(this|what|if|when|where|which|that)$/i.test(word))
+    .slice(0, 4);
+  return words.join(" ");
+}
+
+function inferConceptsFromDiscussion(discussion: string, title: string) {
+  const matches = [...discussion.matchAll(/\b([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s-]{3,40})\s+(?:is|are|ay)\s+([^.!?]{12,180})/gi)];
+  const inferred = matches.slice(0, 4).map((match) => `${toHeadline(match[1].trim())} - ${match[2].trim()}`);
+  if (inferred.length) return inferred;
+  const first = discussion.split(/[.!?]/).map((segment) => segment.trim()).find(Boolean);
+  return first ? [`${title} - ${first}`] : [];
+}
+
+function toHeadline(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function buildDiscussionCards(discussion: string, concepts: string[]) {
+  const sentencePool = discussion
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 20);
+
+  if (sentencePool.length === 0) {
+    return [discussion || "Lesson content not available yet."];
+  }
+
+  const cards: string[] = [];
+  const conceptDeck = concepts.slice(0, 3);
+  let cursor = 0;
+  const targetCardCount = Math.min(4, Math.max(2, Math.ceil(sentencePool.length / 2)));
+
+  for (let cardIndex = 0; cardIndex < targetCardCount; cardIndex += 1) {
+    const chunk = sentencePool.slice(cursor, cursor + 2);
+    cursor += 2;
+    if (!chunk.length) break;
+    const conceptHint = conceptDeck[cardIndex]
+      ? `This section highlights ${conceptDeck[cardIndex].split(" - ")[0]}.`
+      : "";
+    const card = [chunk.join(" "), conceptHint].filter(Boolean).join(" ");
+    cards.push(card);
+  }
+
+  if (!cards.length) return [sentencePool.join(" ")];
+  return cards;
+}
+
+function sanitizeVisualNodes(nodes: string[], title: string, concepts: string[]) {
+  const conceptLabels = concepts.map((item) => item.split(" - ")[0]).filter(Boolean);
+  const cleaned = nodes
+    .map((node) => cleanForLessonDisplay(node))
+    .filter((node) => node.length >= 3)
+    .filter((node) => !/^(this|what|if|and|or|&|las|eng|math|science)\b/i.test(node))
+    .map((node) => toHeadline(node));
+
+  const merged = [...new Set([...cleaned, ...conceptLabels])].slice(0, 5);
+  if (merged.length >= 2) return merged;
+  return [title, ...conceptLabels.slice(0, 2)];
+}
+
+function resolveSource(grade: number, subjectId: SubjectId, quarter: string) {
+  const raw = rawData[String(grade)]?.[subjectId]?.[quarter];
+
+  if (!raw) return undefined;
+  return `${raw.title}. Source index: ${raw.sourcePage}`;
 }
 
 let nextLessonId = 1;
 
 export const lessons: Lesson[] = targetGrades.flatMap((grade) =>
-  subjects.flatMap((subject) => {
-    const modules = getLrModulesFor(grade, subject.id);
-    if (modules.length === 0) {
-      console.warn(`[lesson-scrape] Lesson content not available yet for grade=${grade}, subject=${subject.id}`);
+  subjectIds.flatMap((subjectId) => {
+    const subjectName = subjects.find((subject) => subject.id === subjectId)?.name ?? subjectId;
+    const subjectProcessed = processedData[String(grade)]?.[subjectId] ?? {};
+    const quarterEntries = Object.entries(subjectProcessed).sort(([a], [b]) => Number(a) - Number(b));
+
+    if (quarterEntries.length === 0) {
+      console.warn(`[lesson-scrape] Lesson content not available yet for grade=${grade}, subject=${subjectId}`);
+      return [];
     }
 
-    return modules.flatMap((mod, orderIndex) => {
-      const sourceTopic = deriveSourceTopic(mod.file, "Lesson content not available yet");
-      if (isUnavailableTopic(sourceTopic)) {
-        return [];
-      }
+    return quarterEntries.map(([quarter, entry], orderIndex) => {
+      const cleanedDiscussion = cleanForLessonDisplay(entry.discussion ?? "");
+      const provisionalTitle = sanitizeProcessedTitle(
+        entry.title || "Lesson content not available yet",
+        entry.keyConcepts ?? [],
+        cleanedDiscussion,
+      );
+      const normalizedConcepts = normalizeKeyConcepts(entry.keyConcepts ?? [], cleanedDiscussion, provisionalTitle);
+      const title = sanitizeProcessedTitle(
+        entry.title || provisionalTitle,
+        normalizedConcepts,
+        cleanedDiscussion,
+      );
+      const quarterLabel = toQuarterLabel(quarter);
+      const steps = entry.fallbackReason
+        ? fallbackSteps(title)
+        : buildSteps(
+            title,
+            cleanedDiscussion,
+            entry.examples,
+            entry.learningObjectives ?? [],
+            normalizedConcepts,
+            entry.visualModel,
+          ).map((step) => ({
+            ...step,
+            keywords: [...new Set([...(step.keywords ?? []), subjectId, `grade-${grade}`, quarterLabel.toLowerCase().replace(/\s+/g, "-")])],
+          }));
 
-      const bundle = buildScrapedLessonBundle(grade, subject.name, sourceTopic, mod.quarter, mod.contentSnippet);
-      const steps = bundle.steps.map((step) => ({
-        ...step,
-        keywords: [...new Set([...(step.keywords ?? []), subject.id, `grade-${grade}`, mod.quarter.toLowerCase().replace(/\s+/g, "-")])],
-      }));
-      const id = nextLessonId++;
-      const durationMinutes = Math.max(45, steps.length * 6);
-      const hintPool = steps.flatMap((s) => s.keywords ?? []);
-      const challengeHints = [...new Set(hintPool)].slice(0, 6);
-      if (challengeHints.length < 3) {
-        challengeHints.push(sourceTopic, mod.quarter, subject.id);
-      }
+      const activity = entry.activity
+        ? {
+            prompt: cleanForLessonDisplay(entry.activity.prompt),
+            expectedKeywords: [...new Set([...(entry.activity.expectedKeywords ?? []), ...normalizedConcepts.map((item) => item.split(" - ")[0])])]
+              .map((item) => item.trim())
+              .filter((item) => item.length >= 3)
+              .slice(0, 6),
+          }
+        : undefined;
+
+      const assignment = entry.assignment
+        ? {
+            prompt: cleanForLessonDisplay(entry.assignment.prompt),
+            checklist: entry.assignment.checklist.map((item) => cleanForLessonDisplay(item)).filter(Boolean),
+            expectedKeywords: [...new Set([...(entry.assignment.expectedKeywords ?? []), ...normalizedConcepts.map((item) => item.split(" - ")[0])])]
+              .map((item) => item.trim())
+              .filter((item) => item.length >= 3)
+              .slice(0, 6),
+          }
+        : undefined;
 
       const lesson: Lesson = {
-        id,
+        id: nextLessonId++,
         grade,
-        subject: subject.id,
+        subject: subjectId,
         order: orderIndex + 1,
-        title: bundle.title,
-        description: `${mod.quarter}: ${bundle.summary}`,
-        duration: `${durationMinutes} min`,
-        durationMinutes,
+        title,
+        description: `${quarterLabel}: ${title} for Grade ${grade} ${subjectName}.`,
+        duration: `${Math.max(45, steps.length * 8)} min`,
+        durationMinutes: Math.max(45, steps.length * 8),
         type: "interactive",
-        challengeHints,
-        misconceptions: [bundle.misconception],
-        sourcePdf: mod.file,
-        learningFocus: bundle.learningFocus,
-        contentQuiz: bundle.quiz,
-        processedContent: bundle.processedContent,
+        challengeHints: [title, subjectId, quarterLabel],
+        misconceptions: [entry.fallbackReason ? "Lesson content not available yet." : "Verify details using processed lesson concepts."],
+        sourcePdf: resolveSource(grade, subjectId, quarter),
+        learningFocus: entry.fallbackReason ? "Lesson content not available yet." : `Understand and apply ${title}.`,
+        contentQuiz: entry.quiz?.[0]
+          ? {
+              question: cleanForLessonDisplay(entry.quiz[0].question),
+              options: entry.quiz[0].options.map((option) => cleanForLessonDisplay(option) || "Option not available."),
+              correct: Math.max(0, Math.min(entry.quiz[0].correct, Math.max(entry.quiz[0].options.length - 1, 0))),
+              explanation: cleanForLessonDisplay(entry.quiz[0].explanation),
+            }
+          : undefined,
+        processedContent: {
+          mainTopic: title,
+          keyConcepts: normalizedConcepts,
+          learningObjectives: [...(entry.learningObjectives ?? [])],
+          visualModel: entry.visualModel
+            ? {
+                title: entry.visualModel.title,
+                nodes: [...entry.visualModel.nodes],
+                caption: entry.visualModel.caption,
+              }
+            : undefined,
+          activity,
+          assignment,
+          fallbackReason: entry.fallbackReason,
+        },
         steps,
       };
-      return [lesson];
+
+      return lesson;
     });
   }),
 );
@@ -446,10 +495,6 @@ function firstSentence(value?: string, fallback = "Review the lesson details.") 
   return first.length > 120 ? `${first.slice(0, 117)}...` : first;
 }
 
-function quizTitle(lesson: Lesson) {
-  return lesson.title.replace(/^G\d+\s+[^:]+:\s*/i, "");
-}
-
 function buildLessonQuizDrafts(lesson: Lesson, lessonIndex: number): QuizQuestionDraft[] {
   const drafts: QuizQuestionDraft[] = [];
   const q = lesson.contentQuiz;
@@ -465,13 +510,16 @@ function buildLessonQuizDrafts(lesson: Lesson, lessonIndex: number): QuizQuestio
       correct: shifted.correct,
       explanation: q.explanation,
     });
-  } else {
-    const fallback = withShiftedCorrectOption(
+  }
+
+  if (!q) {
+    const focus = firstSentence(lesson.learningFocus, `The lesson explains ${lesson.title}.`);
+    const shifted = withShiftedCorrectOption(
       [
-        `Explain the main idea of ${quizTitle(lesson)} using an example.`,
-        `Give one related example but leave out the explanation of why it fits.`,
-        `Define one term from the lesson but do not connect it to the full topic.`,
-        `Describe a classroom task without explaining the lesson concept.`,
+        focus,
+        `It focuses on unrelated details rather than the core concept of ${lesson.title}.`,
+        `It lists terms without explaining how they connect to ${lesson.title}.`,
+        "It gives instructions without discussing the lesson concept.",
       ],
       0,
       lesson.id + lessonIndex,
@@ -480,51 +528,10 @@ function buildLessonQuizDrafts(lesson: Lesson, lessonIndex: number): QuizQuestio
       grade: lesson.grade,
       subject: lesson.subject,
       sourcePdf: lesson.sourcePdf,
-      question: `What is the best way to show understanding of ${quizTitle(lesson)}?`,
-      options: fallback.options,
-      correct: fallback.correct,
-      explanation: lesson.learningFocus ?? "Use the lesson steps to review.",
-    });
-  }
-
-  const stepPool = lesson.steps.filter((step) => compactText(step.title) && compactText(step.content));
-  const maxAutoQuestions = Math.min(2, stepPool.length);
-
-  for (let stepIndex = 0; stepIndex < maxAutoQuestions; stepIndex += 1) {
-    const step = stepPool[stepIndex];
-    const otherSteps = stepPool.filter((candidate, i) => i !== stepIndex && !/activity|assignment/i.test(candidate.title));
-    const correctSummary = firstSentence(step.content, step.title);
-    const fallbackDistractors = [
-      `It gives a related detail but misses the main relationship in ${quizTitle(lesson)}.`,
-      `It names a term from the topic without explaining how it is used.`,
-      `It focuses on an activity direction instead of the concept being taught.`,
-    ];
-
-    const distractors = [
-      ...otherSteps.map((other) => firstSentence(other.content, other.title)),
-      ...fallbackDistractors,
-    ];
-
-    const uniqueDistractors = [...new Set(distractors.filter((text) => text && text !== correctSummary))].slice(0, 3);
-    while (uniqueDistractors.length < 3) {
-      uniqueDistractors.push(fallbackDistractors[uniqueDistractors.length % fallbackDistractors.length]);
-    }
-
-    const baseOptions = [correctSummary, ...uniqueDistractors];
-    const shifted = withShiftedCorrectOption(
-      baseOptions,
-      0,
-      lesson.id * 100 + stepIndex * 17 + lessonIndex * 13,
-    );
-
-    drafts.push({
-      grade: lesson.grade,
-      subject: lesson.subject,
-      sourcePdf: lesson.sourcePdf,
-      question: `Which statement best explains an important idea from ${quizTitle(lesson)}?`,
+      question: `What best summarizes the lesson topic "${lesson.title}"?`,
       options: shifted.options,
       correct: shifted.correct,
-      explanation: `This step emphasizes: ${correctSummary}`,
+      explanation: focus,
     });
   }
 

@@ -51,14 +51,16 @@ describe("deped lesson mapping", () => {
     expect(lesson?.steps.map((step) => step.content).join(" ")).not.toMatch(/Actual lesson content not available/i);
   });
 
-  it("turns scraped lessons into student-friendly sections", () => {
+  it("turns scraped lessons into a five-step teaching flow", () => {
     const scrapedLesson = lessons.find((lesson) => lesson.sourcePdf?.includes("Source index:"));
 
     expect(scrapedLesson).toBeDefined();
     expect(scrapedLesson?.steps.map((step) => step.title)).toEqual([
-      "Lesson Introduction",
-      "Discussion",
-      "Examples",
+      "Step 1 - Introduction",
+      "Step 2 - Main Discussion",
+      "Step 3 - Guided Examples / Practice",
+      "Step 4 - Interactive Activity or Assignment",
+      "Step 5 - Quiz / Assessment",
     ]);
   });
 
@@ -93,11 +95,39 @@ describe("deped lesson mapping", () => {
     expect(scrapedLesson?.processedContent?.assignment?.prompt).toBeTruthy();
   });
 
-  it("keeps activities and assignments out of the lesson player steps", () => {
+  it("keeps activity and quiz steps inside the lesson player flow", () => {
     const playerOnlySections = lessons
       .flatMap((lesson) => lesson.steps.map((step) => step.title))
-      .filter((title) => /interactive activity|assignment|visual guide/i.test(title));
+      .filter((title) => /Step 4 - Interactive Activity or Assignment|Step 5 - Quiz \/ Assessment/i.test(title));
 
-    expect(playerOnlySections).toEqual([]);
+    expect(playerOnlySections.length).toBeGreaterThan(0);
+  });
+
+  it("does not render dangling references to missing UI materials", () => {
+    const dangling = lessons
+      .flatMap((lesson) => lesson.steps.map((step) => step.content))
+      .filter((content) =>
+        /\bon the left|on the right|see image|see chart|see map|see diagram|refer to (the )?(poem|passage|chart|map|diagram|image)|read (the )?(poem|passage)\b/i.test(
+          content,
+        ),
+      );
+
+    expect(dangling).toEqual([]);
+  });
+
+  it("repairs weak concept fragments into labeled concepts", () => {
+    const weakFragments = lessons
+      .flatMap((lesson) => lesson.processedContent?.keyConcepts ?? [])
+      .filter((concept) => /^(this|what|if|it)\s*[:\-]/i.test(concept));
+
+    expect(weakFragments).toEqual([]);
+  });
+
+  it("does not expose card or internal processor labels in student step content", () => {
+    const leakedInternalLabels = lessons
+      .flatMap((lesson) => lesson.steps.map((step) => step.content))
+      .filter((content) => /\bCard\s+\d+\b|Focus concept:/i.test(content));
+
+    expect(leakedInternalLabels).toEqual([]);
   });
 });
